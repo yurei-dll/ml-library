@@ -1,3 +1,10 @@
+# Specific to this project
+data/
+media/
+registry.json
+# I just use this file to see if code snipets actually work
+test.js
+
 # Logs
 logs
 *.log

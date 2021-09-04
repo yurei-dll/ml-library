@@ -42,6 +42,7 @@ var httpServer = http.createServer((req, res) => {
   // to prevent broken downloads, tokens must be sent with each file requested. Only previews are shared anyway
   // full-sized image downloads will be a separate request
   if (req.url) {
+    console.log("Requested file: " + req.url);
     try {
       if (req.url == "/") {
         res.end(fs.readFileSync("./ui/index.html"));
@@ -85,64 +86,65 @@ wsServer.on('request', function (request) {
       var msgData;
       try {
         msgData = JSON.parse(message.utf8Data);
+
+        // Request handler
+        switch (msgData.command) {
+          case "get":
+
+            break;
+
+          case "list":
+            // Check the required parameters first
+            if (!msgData.target) { handleError("Missing target"); return; }
+            // Make sure it starts and ends with a slash
+            if (msgData.target[0] != "/" || msgData.target[msgData.target.length - 1] != "/") { handleError("Target must start and end with a slash"); return; }
+
+            // Trim the last character if it's a slash, unless it's the root folder
+            if (msgData.target.endsWith("/") && msgData.target != "/") {
+              msgData.target = msgData.target.substring(0, msgData.target.length - 1);
+            }
+
+            // Read the directory
+            var dir = fs.readdirSync("./media" + msgData.target);
+            if (!dir) { handleError("Directory not found"); return; }
+            var responsePayload = { "objects": [] };
+            dir.forEach(file => {
+              // If it's a folder, add a slash to the end of the name
+              if (fs.lstatSync("./media" + msgData.target + "/" + file).isDirectory()) {
+                responsePayload.objects.push({
+                  "name": file,
+                  "reference": msgData.target + "/" + file,
+                  "type": "folder"
+                });
+              }
+              // If it's a file, add the file extension to the name
+              else {
+                // Only include a slash between the folder and the file if it's not the root folder
+                var slash = msgData.target != "/" ? "/" : "";
+                responsePayload.objects.push({
+                  "name": file,
+                  "reference": msgData.target + slash + file,
+                  "type": "file"
+                });
+              }
+            });
+            // Send the payload
+            connection.send(JSON.stringify(responsePayload));
+            break;
+
+          case "search":
+
+            break;
+
+          default:
+            handleError("Unknown command");
+            break;
+        }
       } catch (error) {
         console.log(error);
         // Let the client know they screwed up
         handleError(error);
         return;
-      }
-
-      // Request handler
-      switch (msgData.command) {
-        case "get":
-
-          break;
-
-        case "list":
-          // Check the required parameters first
-          if (!msgData.target) { handleError("Missing target"); return; }
-
-
-          // Trim the last character if it's a slash, unless it's the root folder
-          if (msgData.target.endsWith("/") && msgData.target != "/") {
-            msgData.target = msgData.target.substring(0, msgData.target.length - 1);
-          }
-
-          // Read the directory
-          var dir = fs.readdirSync("./media" + msgData.target);
-          if (!dir) { handleError("Directory not found"); return; }
-          var responsePayload = { "objects": [] };
-          dir.forEach(file => {
-            // If it's a folder, add a slash to the end of the name
-            if (fs.lstatSync("./media" + msgData.target + "/" + file).isDirectory()) {
-              responsePayload.objects.push({
-                "name": file,
-                "reference": msgData.target + "/" + file,
-                "type": "folder"
-              });
-            }
-            // If it's a file, add the file extension to the name
-            else {
-              // Only include a slash between the folder and the file if it's not the root folder
-              var slash = msgData.target != "/" ? "/" : "";
-              responsePayload.objects.push({
-                "name": file,
-                "reference": msgData.target + slash + file,
-                "type": "file"
-              });
-            }
-          });
-          // Send the payload
-          connection.send(JSON.stringify(responsePayload));
-          break;
-
-        case "search":
-
-          break;
-
-        default:
-          handleError("Unknown command");
-          break;
       }
     }
   });

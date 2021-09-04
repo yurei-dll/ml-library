@@ -11,16 +11,17 @@
 <body>
     <div class="root">
         <div class="navbar">
-            <span class="search-bar">
-                <input id="search-input" type="text" placeholder="Type here...">
+            <span>
+                <input class="search-bar" id="search-input" type="text" placeholder="Type here...">
             </span>
-            <span class="navigation-button">
-                <b onclick="search()">Search</b>
+            <span>
+                <button class="navigation-button" onclick="search()">Search</button>
             </span>
-            <span class="navigation-button">
-                <b onclick="goHome()">Home</b>
+            <span>
+                <button class="navigation-button" onclick="navigate('/')">Home</button>
             </span>
-            <div class="cwd-bar"></div>
+            <div class=" cwd-bar">
+            </div>
         </div>
         <div class="content">
             <!-- Little message that says search to get started -->
@@ -70,8 +71,7 @@
     // Websocket events
     ws.onopen = function () {
         console.log("Connection successful, requesting root folder.");
-        let message = { "command": "list", "target": "/" }
-        ws.send(JSON.stringify(message));
+        navigate("/");
     }
 
     ws.onmessage = function (event) {
@@ -86,6 +86,17 @@
         renderResults();
     }
 
+    ws.onclose = function () {
+        console.log("Connection closed.");
+        // Show a message that the connection was closed
+        var message = document.createElement("div");
+        message.className = "text-bubble";
+        message.innerHTML = "Connection closed. Please refresh the page.";
+        var content = document.getElementsByClassName("content")[0]
+        content.innerHTML = "";
+        content.appendChild(message);
+    }
+
     // Render the results
     function renderResults() {
         // Get the content div and add new spans under it for each result
@@ -96,6 +107,9 @@
             if (obj.type == "file") {
                 var div = document.createElement("div");
                 div.className = "result-file"
+                var image = document.createElement("img");
+                image.src = "https://img.icons8.com/plasticine/50/000000/file.png";
+                div.appendChild(image);
                 var link = document.createElement("a");
                 link.href = obj.reference;
                 link.innerHTML = obj.name;
@@ -104,6 +118,9 @@
             } else if (obj.type == "folder") {
                 var div = document.createElement("div");
                 div.className = "result-folder"
+                var image = document.createElement("img");
+                image.src = "https://img.icons8.com/plasticine/50/000000/folder-invoices.png";
+                div.appendChild(image);
                 var link = document.createElement("a");
                 link.href = `javascript:navigate("${cwd + obj.name}/")`;
                 link.innerHTML = obj.name;
@@ -124,11 +141,13 @@
         cwdBar.innerHTML = "";
         var parts = cwd.split("/");
         parts.forEach(part => {
-            var link = document.createElement("a");
-            link.href = `javascript:navigate("${parts.slice(0, parts.indexOf(part) + 1).join("/")}/")`;
-            link.innerHTML = part;
-            cwdBar.appendChild(link);
-            cwdBar.appendChild(document.createTextNode("/"));
+            if (part !== "") {
+                var link = document.createElement("a");
+                link.href = `javascript:navigate("${parts.slice(0, parts.indexOf(part) + 1).join("/")}/")`;
+                link.innerHTML = part;
+                cwdBar.appendChild(link);
+                cwdBar.appendChild(document.createTextNode("/"));
+            }
         });
     }
 </script>

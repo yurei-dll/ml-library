@@ -7,14 +7,17 @@ with a peach border.
 
 .root {
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 12px;
+    font-size: 14px;
+    padding: 10px;
+    margin: 10px;
+    background-color: #ffffff;
+    border-color: #ffffff;
+    border-width: 3px;
+    border-radius: 3px;
 }
 
 .navbar {
     background-color: #2f2f2f;
-    border-color: #ffffff;
-    border-width: 3px 0;
-    border-radius: 3px;
     position: fixed;
     top: 0;
     left: 0;
@@ -22,20 +25,33 @@ with a peach border.
     height: 50px;
     z-index: 1;
 }
+.content {
+    height: 80%;
+    transform: translateY(50px);
+}
 
 /* Bold white letters with light blue links */
 .cwd-bar {
     color: #ffffff;
     font-weight: bold;
-    font-size: 25px;
+    font-size: 22px;
 }
-
+:link {
+    color: #00aaff;
+}
+:link:hover {
+    color: #48c2ff;
+}
 
 .search-bar {
-    border-width: 3px 0;
+    background-color: #e7e7e7;
+    border-color: #ffffff;
+    border-width: 3px;
     border-radius: 3px;
+    color: #2f2f2f;
+    font-size: 14px;
+    font-weight: bold;
 }
-
 .navigation-button {
     background-color: #e7e7e7;
     border-color: #ffffff;
@@ -59,46 +75,25 @@ with a peach border.
     color: #2f2f2f;
     font-size: 14px;
     font-weight: bold;
+    text-align: justify;
     padding: 10px;
     position: absolute;
     top: 50%;
     left: 50%;
 }
 
-/* The main content area */
-.content {
-    background-color: #ffffff;
-    border-color: #ffffff;
-    border-width: 3px;
-    border-radius: 3px;
-    padding: 10px;
-}
-
 /* A wide rectangle with an icon on the left */
-.result-folder {
+.result-file, .result-folder {
     background-color: #e7e7e7;
     border-color: #ffffff;
+    padding: 10px;
     border-width: 3px;
-    border-radius: 5px;
+    border-radius: 10px;
+    border-color: #a3c9d3;
     color: #2f2f2f;
     width: 90%;
-    height: 30px;
-    padding: 10px;
-    margin: 10px;
-    position: center;
-    transform: translateY(30px);
 }
 
 .result-file {
-    background-color: #e7e7e7;
-    border-color: #ffffff;
-    border-width: 3px;
-    border-radius: 5px;
-    color: #2f2f2f;
-    width: 90%;
-    height: 30px;
-    padding: 10px;
-    margin: 10px;
-    position: center;
-    transform: translateY(30px);
+    background-color: #a3c9d3;
 }

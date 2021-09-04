@@ -1,20 +1,136 @@
-<html lang="en">
+<!DOCTYPE html>
+<html>
 
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Library</title>
-
-    <script href="/index.js"></script>
+    <title>UI</title>
+    <!-- Reference style.css -->
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div class="app">
-        <!-- Show loading text with jello animation in the center of the screen -->
-        <div class="loading">
-            <p>Loading...</p>
+    <div class="root">
+        <div class="navbar">
+            <span class="search-bar">
+                <input id="search-input" type="text" placeholder="Type here...">
+            </span>
+            <span class="navigation-button">
+                <b onclick="search()">Search</b>
+            </span>
+            <span class="navigation-button">
+                <b onclick="goHome()">Home</b>
+            </span>
+            <div class="cwd-bar"></div>
+        </div>
+        <div class="content">
+            <!-- Little message that says search to get started -->
+            <div class="text-bubble">
+                <p>Nothing here yet...</p>
+            </div>
         </div>
     </div>
 </body>
+
+<script>
+    // Get the url of the current page and connect to it as a websocket
+    var results = [];
+    var cwd = "/";
+    var url = window.location.href;
+
+    // Replace the http or https with ws
+    url = url.replace("http", "ws");
+    url = url.replace("https", "ws");
+
+    console.log("Connecting to " + url);
+    var ws = new WebSocket(url);
+
+
+    function goHome() {
+        console.log("Going home")
+        window.location.href = "/";
+    }
+    function search() {
+        // Get the value of the search bar
+        results = [];
+        var search = document.getElementById("search-input").value;
+        console.log("Searching for " + search);
+    }
+    function navigate(path) {
+        // Clear the results
+        results = [];
+        cwd = path;
+        // Send a new request
+        ws.send(JSON.stringify({
+            "command": "list",
+            "target": path
+        }));
+    }
+    // Background operations
+
+    // Websocket events
+    ws.onopen = function () {
+        console.log("Connection successful, requesting root folder.");
+        let message = { "command": "list", "target": "/" }
+        ws.send(JSON.stringify(message));
+    }
+
+    ws.onmessage = function (event) {
+        console.log("Received message: " + event.data);
+        let message = JSON.parse(event.data);
+        if (message.objects) {
+            // A list of objects was sent, add them to the results
+            message.objects.forEach(element => {
+                results.push(element);
+            });
+        }
+        renderResults();
+    }
+
+    // Render the results
+    function renderResults() {
+        // Get the content div and add new spans under it for each result
+        var content = document.getElementsByClassName("content")[0];
+        content.innerHTML = "";
+        results.forEach(obj => {
+            var span = document.createElement("span");
+            if (obj.type == "file") {
+                var div = document.createElement("div");
+                div.className = "result-file"
+                var link = document.createElement("a");
+                link.href = obj.reference;
+                link.innerHTML = obj.name;
+                div.appendChild(link);
+                span.appendChild(div);
+            } else if (obj.type == "folder") {
+                var div = document.createElement("div");
+                div.className = "result-folder"
+                var link = document.createElement("a");
+                link.href = `javascript:navigate("${cwd + obj.name}/")`;
+                link.innerHTML = obj.name;
+                div.appendChild(link);
+                span.appendChild(div);
+            }
+            content.appendChild(span);
+        });
+        // If there are no results, show a message
+        if (results.length == 0) {
+            var span = document.createElement("span");
+            span.className = "text-bubble"
+            span.innerHTML = "This folder is empty.";
+            content.appendChild(span);
+        }
+        // Add each part of the cwd to the cwd bar as a separate link back to that folder
+        var cwdBar = document.getElementsByClassName("cwd-bar")[0];
+        cwdBar.innerHTML = "";
+        var parts = cwd.split("/");
+        parts.forEach(part => {
+            var link = document.createElement("a");
+            link.href = `javascript:navigate("${parts.slice(0, parts.indexOf(part) + 1).join("/")}/")`;
+            link.innerHTML = part;
+            cwdBar.appendChild(link);
+            cwdBar.appendChild(document.createTextNode("/"));
+        });
+    }
+</script>
 
 </html>

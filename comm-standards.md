@@ -19,4 +19,5 @@ The server responds with a JSON object that could have the following properties:
     Each object has the following properties:
     - name: the name of the object
     - reference: the reference URL to the object (e.g. "http://192.168.1.2/foo/bar.txt")
+    - thumbnail: the thumbnail URL to use, this could be null
 - error: when an error occurs, the server returns an error message

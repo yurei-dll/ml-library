@@ -6,7 +6,7 @@ Each message between clients and servers is a JSON object. Directory/target prop
 On first connect, the client sends a "list" command for the "/" folder.
 
 Each request to the server can have the following properties:
-- command: the command to execute (e.g. "get", "list", "put", "search")
+- command: the command to execute (e.g. "list", "put", "search")
 - target: the directory or file to operate on (e.g. "/foo/bar.txt", "/foo/")
 
 - query: the query string to search for (e.g. "foo") - only used for search

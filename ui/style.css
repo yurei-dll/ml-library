@@ -25,10 +25,33 @@ with a peach border.
     height: 50px;
     z-index: 1;
 }
+
+/* Content starts with one column, then adds another for each 500px of width with a max of 1500px */
 .content {
     height: 80%;
     transform: translateY(50px);
+    display: grid;
+    grid-template-columns: 1fr;
+    align-content: flex-start;
+    gap: 16px;
+    padding: 16px;
 }
+@media screen and (min-width: 500px) {
+    .content {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+@media screen and (min-width: 1000px) {
+    .content {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+}
+@media screen and (min-width: 1500px) {
+    .content {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+}
+
 
 /* Bold white letters with light blue links */
 .cwd-bar {
@@ -68,32 +91,32 @@ with a peach border.
 
 /* Center of the screen with a strong outline */
 .text-bubble {
-    background-color: #e7e7e7;
-    border-color: #ffffff;
-    border-width: 3px;
-    border-radius: 3px;
     color: #2f2f2f;
-    font-size: 14px;
-    font-weight: bold;
-    text-align: justify;
+    background-color: #e7e7e7;
     padding: 10px;
     position: absolute;
     top: 50%;
     left: 50%;
+    transform: translate(-50%, -50%);
 }
 
-/* A wide rectangle with an icon on the left */
 .result-file, .result-folder {
     background-color: #e7e7e7;
     border-color: #ffffff;
     padding: 10px;
-    border-width: 3px;
+border: darkgrey 3px solid;
     border-radius: 10px;
-    border-color: #a3c9d3;
     color: #2f2f2f;
     width: 90%;
 }
-
 .result-file {
-    background-color: #a3c9d3;
+    background-color: #cde2e7;
+    vertical-align: text-top;
+}
+/* A small number shown on the right of the file */
+.result-size {
+    color: #2f2f2f;
+    font-size: 10px;
+    font-weight: bold;
+    float: right;
 }

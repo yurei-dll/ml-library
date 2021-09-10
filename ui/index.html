@@ -3,8 +3,8 @@
 
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UI</title>
-    <!-- Reference style.css -->
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -24,12 +24,11 @@
             </div>
         </div>
         <div class="content">
-            <!-- Little message that says search to get started -->
-            <div class="text-bubble">
-                <p>Nothing here yet...</p>
-            </div>
+
         </div>
     </div>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
 </body>
 
 <script>
@@ -66,6 +65,12 @@
             "target": path
         }));
     }
+    function readSize(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        else if (bytes < 1048576) return (bytes / 1024).toFixed(3) + " KB";
+        else if (bytes < 1073741824) return (bytes / 1048576).toFixed(3) + " MB";
+        else return (bytes / 1073741824).toFixed(3) + " GB";
+    }
     // Background operations
 
     // Websocket events
@@ -99,23 +104,49 @@
 
     // Render the results
     function renderResults() {
+        // Make sure the folders are listed first, alphabetically
+        results.sort(function (a, b) {
+            if (a.type == "folder" && b.type != "folder") {
+                return -1;
+            } else if (a.type != "folder" && b.type == "folder") {
+                return 1;
+            } else {
+                return a.name.localeCompare(b.name);
+            }
+        });
+
         // Get the content div and add new spans under it for each result
         var content = document.getElementsByClassName("content")[0];
         content.innerHTML = "";
         results.forEach(obj => {
             var span = document.createElement("span");
             if (obj.type == "file") {
+                // Files
                 var div = document.createElement("div");
                 div.className = "result-file"
-                var image = document.createElement("img");
-                image.src = "https://img.icons8.com/plasticine/50/000000/file.png";
-                div.appendChild(image);
                 var link = document.createElement("a");
                 link.href = obj.reference;
                 link.innerHTML = obj.name;
+                // Add the thumbnail too
+                if (obj.thumbnail) {
+                    var thumbnail = document.createElement("img");
+                    thumbnail.src = obj.thumbnail;
+                    div.appendChild(thumbnail);
+                } else {
+                    var image = document.createElement("img");
+                    image.src = "https://img.icons8.com/plasticine/50/000000/file.png";
+                    div.appendChild(image);
+                }
                 div.appendChild(link);
                 span.appendChild(div);
+                if (obj.size) {
+                    var size = document.createElement("span");
+                    size.innerHTML = readSize(obj.size);
+                    size.className = "result-size";
+                    div.appendChild(size);
+                }
             } else if (obj.type == "folder") {
+                // Folders
                 var div = document.createElement("div");
                 div.className = "result-folder"
                 var image = document.createElement("img");

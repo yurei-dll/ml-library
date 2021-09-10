@@ -4,6 +4,14 @@ const http = require('http');
 const ws = require('websocket').server;
 const canvas = require('canvas');
 
+const mobilenet = require('@tensorflow-models/mobilenet');
+const tf = require('@tensorflow/tfjs');
+require('@tensorflow/tfjs-core')
+require('@tensorflow/tfjs-node')
+
+// An array of image paths to be classified
+var imageQueue = [];
+
 // Variables
 var imagePrefix = "lib_";
 var thumbPrefix = "thumb_";
@@ -17,18 +25,10 @@ var maxThumbSize = 325;
 
 /**
  * Whats within the data.json files for each folder
- * @typedef {{"filename":string, "results":Object}[]} data
- */
-/**
- * 
- * @typedef {{"user":string,"token":string,"address":string,"lastPing":number}} session
+ * @typedef {files:{"filename":string, "results":Object}[]} data
  */
 //#endregion
 // #region Image processing
-/**
- * Generates a unique name for the image using the time and a random number
- * @returns {string}
- */
 function generateImageName() {
   return imagePrefix + Math.floor(Math.random() * 100000) + "_" + Date.now();
 }
@@ -37,6 +37,11 @@ function generateImageName() {
  */
 function getImagesIn(path) {
   var images = [];
+  var dirHasJson = fs.existsSync(path + "/data.json");
+  if (!dirHasJson) {
+    let jsonData = { "files": [] }
+    fs.writeFileSync(path + "/data.json", JSON.stringify(jsonData));
+  }
   fs.readdirSync(path).forEach(file => {
     if (fs.statSync(path + file).isDirectory()) {
       var moreImages = getImagesIn(path + file + "/");
@@ -51,7 +56,21 @@ getImagesIn("./media/").forEach(image => {
   var imageName = image.split("/").pop();
   var imagePath = image.split("/").slice(0, -1).join("/");
   var fileExtension = imageName.split(".").pop();
-  // Ignore the image if it already has the prefix or is a thumbnail
+  // Check if the image has been classified
+  var imageHasJson = fs.existsSync(imagePath + "/data.json");
+  if (!imageHasJson && !imageName.startsWith(thumbPrefix)) {
+    let jsonData = { "files": [] }
+    fs.writeFileSync(imagePath + "/data.json", JSON.stringify(jsonData));
+  } else {
+    var jsonData = JSON.parse(fs.readFileSync(imagePath + "/data.json"));
+    var imageHasClassified = jsonData.files.find(file => file.filename == imageName);
+    if (!imageHasClassified) {
+      // Add the image to the queue
+      console.log("Adding " + imageName + " to the queue");
+      imageQueue.push(image);
+    }
+  }
+  // No need to go further if the image already has a thumbnail
   if (imageName.startsWith(imagePrefix) || imageName.startsWith(thumbPrefix)) { return; }
   // Rename the image
   var newName = generateImageName() + "." + fileExtension;
@@ -78,7 +97,40 @@ getImagesIn("./media/").forEach(image => {
     console.log("Generated thumbnail for " + newName);
   }
 });
-
+// Fire up the classifier
+mobilenet.load().then(model => {
+  console.log("Model loaded");
+  // After the model is loaded, start classifying images in the queue
+  setInterval(async () => {
+    // Get the first image in the queue if there is one
+    if (imageQueue.length > 0) {
+      console.log("Classifying " + imageQueue[0]);
+      var imagePath = imageQueue.shift();
+      var imageName = imagePath.split("/").pop();
+      var imageDir = imagePath.split("/").slice(0, -1).join("/");
+      // Load the data.json file and see if it has already been classified
+      var data = JSON.parse(fs.readFileSync(imageDir + "/data.json"));
+      var imageData = data.files.find(file => file.filename == imageName);
+      if (imageData) {
+        console.log("Already classified " + imageName);
+      } else {
+        // Prepare the tensor using canvas
+        var rawImage = fs.readFileSync(imagePath);
+        var cvnImage = new canvas.Image();
+        cvnImage.src = rawImage;
+        var cvnCanvas = new canvas.Canvas(cvnImage.width, cvnImage.height);
+        cvnCanvas.getContext("2d").drawImage(cvnImage, 0, 0);
+        var tensor = tf.browser.fromPixels(cvnCanvas);
+        // Classify the image
+        var results = await model.classify(tensor);
+        // Add the results to the data.json file
+        data.files.push({ "fileName": imageName, "results": results });
+        fs.writeFileSync(imageDir + "/data.json", JSON.stringify(data, null, 2));
+        console.log("Classified " + imageName);
+      }
+    }
+  }, 1000);
+});
 //#endregion
 
 //#region Connection managers
@@ -98,13 +150,14 @@ var httpServer = http.createServer((req, res) => {
     try {
       if (url == "/") {
         res.end(fs.readFileSync("./ui/index.html"));
-      } else if (url == "/style.css") {
-        res.end(fs.readFileSync("./ui/style.css"));
+      } else if (fs.existsSync("./ui" + url)) {
+        res.end(fs.readFileSync("./ui" + url));
       } else if (fs.existsSync("./media" + url)) {
         res.end(fs.readFileSync("./media" + url));
       } else {
         // Give a 404
         res.writeHead(404);
+        res.end();
       }
     } catch (e) {
       // Universal failsafe
@@ -141,10 +194,6 @@ wsServer.on('request', function (request) {
 
         // Request handler
         switch (msgData.command) {
-          case "get":
-
-            break;
-
           case "list":
             // Check the required parameters first
             if (!msgData.target) { handleError("Missing target"); return; }
@@ -197,7 +246,53 @@ wsServer.on('request', function (request) {
             break;
 
           case "search":
-
+            // Check the required parameters first
+            if (msgData.query == null) { handleError("Missing query"); return; }
+            var payload = {
+              "objects": []
+            };
+            var jsonFiles = [];
+            // Build a list of all the json files
+            var explore = (dir) => {
+              var files = fs.readdirSync(dir);
+              files.forEach(file => {
+                var filePath = dir + "/" + file;
+                if (fs.lstatSync(filePath).isDirectory()) {
+                  explore(filePath);
+                } else {
+                  if (file.endsWith(".json")) {
+                    jsonFiles.push(filePath);
+                  }
+                }
+              });
+            }
+            explore("./media");
+            // Search each json file for results
+            var query = msgData.query.toLowerCase();
+            var foundMatches = [];
+            jsonFiles.forEach(file => {
+              var dir = file.substring(0, file.lastIndexOf("/"));
+              var data = JSON.parse(fs.readFileSync(file));
+              // Search each object for the query
+              if (!data.files) { return; }
+              data.files.forEach(object => {
+                object.results.filter(result => result.className.toLowerCase().includes(query)).forEach(match => {
+                  // Remove the "./media" part for the reference
+                  var fileName = file.substring(file.lastIndexOf("/") + 1);
+                  var dir = file.substring(0, file.lastIndexOf("/"));
+                  var reference = file.substring(7);
+                  var thmbExists = fs.existsSync(dir + "/" + thumbPrefix + fileName);
+                  payload.objects.push({
+                    "name": object.fileName,
+                    "reference": reference,
+                    "thumbnail": thmbExists ? dir + thumbPrefix + fileName : null,
+                    "type": "file"
+                  });
+                });
+              });
+            });
+            // Send the payload
+            connection.send(JSON.stringify(payload));
             break;
 
           default:
@@ -214,14 +309,3 @@ wsServer.on('request', function (request) {
   });
 });
 //#endregion
-
-
-
-// Background operations
-setInterval(async () => {
-  // Kill inactive sessions - client will have to reload
-
-
-
-
-}, 1000);

@@ -2,11 +2,14 @@
 const fs = require('fs');
 const http = require('http');
 const ws = require('websocket').server;
+const canvas = require('canvas');
 
 // Variables
 var imagePrefix = "lib_";
+var thumbPrefix = "thumb_";
+var maxThumbSize = 325;
 
-// Definitions
+//#region Definitions
 /**
  * Each folder is actually created within ./media, with a data.json file that stores all the results for each image within it.
  * @typedef {{"name":string,"modified":number,"preview":string"status":"que"|"busy"|"ready"|"error","images":string[],"folders":folder[]}} folder
@@ -20,7 +23,7 @@ var imagePrefix = "lib_";
  * 
  * @typedef {{"user":string,"token":string,"address":string,"lastPing":number}} session
  */
-
+//#endregion
 // #region Image processing
 /**
  * Generates a unique name for the image using the time and a random number
@@ -29,6 +32,53 @@ var imagePrefix = "lib_";
 function generateImageName() {
   return imagePrefix + Math.floor(Math.random() * 100000) + "_" + Date.now();
 }
+/**
+ * Explores all the folders within the media folder and returns an array of all image paths
+ */
+function getImagesIn(path) {
+  var images = [];
+  fs.readdirSync(path).forEach(file => {
+    if (fs.statSync(path + file).isDirectory()) {
+      var moreImages = getImagesIn(path + file + "/");
+      images = images.concat(moreImages);
+    } else if (file.endsWith(".jpg") || file.endsWith(".png")) {
+      images.push(path + file);
+    }
+  });
+  return images;
+}
+getImagesIn("./media/").forEach(image => {
+  var imageName = image.split("/").pop();
+  var imagePath = image.split("/").slice(0, -1).join("/");
+  var fileExtension = imageName.split(".").pop();
+  // Ignore the image if it already has the prefix or is a thumbnail
+  if (imageName.startsWith(imagePrefix) || imageName.startsWith(thumbPrefix)) { return; }
+  // Rename the image
+  var newName = generateImageName() + "." + fileExtension;
+  fs.renameSync(imagePath + "/" + imageName, imagePath + "/" + newName);
+  console.log("Renamed " + imageName + " to " + newName);
+  // Check for existing thumbnail
+  if (!fs.existsSync(imagePath + "/" + thumbPrefix + newName)) {
+    // Generate a thumbnail using canvas while keeping the aspect ratio
+    var thumbName = thumbPrefix + newName;
+    var thumbPath = imagePath + "/" + thumbName;
+    var cvnImage = new canvas.Image();
+    cvnImage.src = fs.readFileSync(imagePath + "/" + newName);
+    var thumb = new canvas.Canvas(maxThumbSize, maxThumbSize);
+    // First check if the image is wider than it is tall
+    if (cvnImage.width > cvnImage.height) {
+      thumb.width = maxThumbSize;
+      thumb.height = Math.floor(maxThumbSize * cvnImage.height / cvnImage.width);
+    } else {
+      thumb.width = Math.floor(maxThumbSize * cvnImage.width / cvnImage.height);
+      thumb.height = maxThumbSize;
+    }
+    thumb.getContext("2d").drawImage(cvnImage, 0, 0, thumb.width, thumb.height);
+    fs.writeFileSync(thumbPath, thumb.toBuffer());
+    console.log("Generated thumbnail for " + newName);
+  }
+});
+
 //#endregion
 
 //#region Connection managers
@@ -42,14 +92,16 @@ var httpServer = http.createServer((req, res) => {
   // to prevent broken downloads, tokens must be sent with each file requested. Only previews are shared anyway
   // full-sized image downloads will be a separate request
   if (req.url) {
-    console.log("Requested file: " + req.url);
+    // Decode the url
+    var url = decodeURI(req.url);
+    console.log("Requested file: " + url);
     try {
-      if (req.url == "/") {
+      if (url == "/") {
         res.end(fs.readFileSync("./ui/index.html"));
-      } else if (req.url == "/style.css") {
+      } else if (url == "/style.css") {
         res.end(fs.readFileSync("./ui/style.css"));
-      } else if (fs.existsSync("./media" + req.url)) {
-        res.end(fs.readFileSync("./media" + req.url));
+      } else if (fs.existsSync("./media" + url)) {
+        res.end(fs.readFileSync("./media" + url));
       } else {
         // Give a 404
         res.writeHead(404);
@@ -111,21 +163,33 @@ wsServer.on('request', function (request) {
             dir.forEach(file => {
               // If it's a folder, add a slash to the end of the name
               if (fs.lstatSync("./media" + msgData.target + "/" + file).isDirectory()) {
+                // Folder
+                var slash = msgData.target != "/" ? "/" : "";
                 responsePayload.objects.push({
                   "name": file,
-                  "reference": msgData.target + "/" + file,
+                  "reference": msgData.target + slash + file,
                   "type": "folder"
                 });
               }
               // If it's a file, add the file extension to the name
               else {
+                // Ignore if it's not an image or if its a thumbnail
+                if (!file.endsWith(".png") && !file.endsWith(".jpg") && !file.endsWith(".jpeg")) { return; }
+                if (file.startsWith(thumbPrefix)) { return; }
+
+                let thumbNailExists = fs.existsSync("./media" + msgData.target + "/" + thumbPrefix + file);
                 // Only include a slash between the folder and the file if it's not the root folder
+                // If the image has a thumbnail, include a thumbnail url
                 var slash = msgData.target != "/" ? "/" : "";
-                responsePayload.objects.push({
+                var fileSize = fs.statSync("./media" + msgData.target + "/" + file).size;
+                var payload = {
                   "name": file,
                   "reference": msgData.target + slash + file,
-                  "type": "file"
-                });
+                  "type": "file",
+                  "thumbnail": thumbNailExists ? msgData.target + slash + thumbPrefix + file : null,
+                  "size": fileSize
+                }
+                responsePayload.objects.push(payload);
               }
             });
             // Send the payload
